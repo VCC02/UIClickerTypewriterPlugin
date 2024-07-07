@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <PathDelim Value="\"/>
+    <Version Value="12"/>
+    <BuildModes Active="Default"/>
+    <Units>
+      <Unit>
+        <Filename Value="TWLiveTest.ppr"/>
+        <FRMtype Value="0"/>
+        <IsPartOfProject Value="True"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="0"/>
+        <TopLine Value="23"/>
+        <CursorPos Y="48"/>
+        <UsageCount Value="20"/>
+      </Unit>
+      <Unit>
+        <Filename Value="TWLiveTestMainForm.pas"/>
+        <FRMtype Value="200"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="frmTWLiveTestMain"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="0"/>
+        <WindowIndex Value="0"/>
+        <CursorPos X="22" Y="3"/>
+        <UsageCount Value="20"/>
+        <Loaded Value="True"/>
+        <LoadedDesigner Value="True"/>
+      </Unit>
+    </Units>
+    <JumpHistory HistoryIndex="4">
+      <Position>
+        <Filename Value="TWLiveTestMainForm.pas"/>
+      </Position>
+      <Position>
+        <Filename Value="TWLiveTestMainForm.pas"/>
+        <Caret Line="37" Column="21" TopLine="14"/>
+      </Position>
+      <Position>
+        <Filename Value="TWLiveTestMainForm.pas"/>
+        <Caret Line="38" Column="42" TopLine="16"/>
+      </Position>
+      <Position>
+        <Filename Value="TWLiveTestMainForm.pas"/>
+        <Caret Line="40" Column="53" TopLine="16"/>
+      </Position>
+      <Position>
+        <Filename Value="TWLiveTestMainForm.pas"/>
+        <Caret Line="3" Column="22"/>
+      </Position>
+    </JumpHistory>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes ActiveMode=""/>
+    </RunParams>
+  </ProjectSession>
+</CONFIG>

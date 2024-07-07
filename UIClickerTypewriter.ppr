@@ -1,0 +1,354 @@
+{
+    Copyright (C) 2024 VCC
+    creation date: 05 Jul 2024
+    initial release date: 07 Jul 2024
+
+    author: VCC
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+    OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+}
+
+
+library UIClickerTypewriter;
+
+{$mode objfpc}{$H+}
+
+uses
+  Interfaces, Classes, SysUtils, Graphics, TypewriterDM, ImgList,
+  ClickerActionPlugins, ClickerUtils, DllUtils,
+  TypewriterPluginProperties,
+  StringDiffLoader, HashUnit, Diff;
+
+
+var
+  AddToLogCallback: TOnActionPlugin_AddToLog;
+
+  WhatToBecomeVarNamePropertyValue: string;
+  CurrentTextVarNamePropertyValue: string;
+  TextToBeTypedVarNamePropertyValue: string;
+  CurrentTextVarUpdaterActionPropertyValue: string;
+  LowLevelTypewriterActionPropertyValue: string;
+
+
+
+procedure AddToLog(AMsg: string);  //thread safe
+begin
+  if @AddToLogCallback <> nil then
+    AddToLogCallback(DefaultPluginReference, @AMsg[1]);
+end;
+
+
+function GetAPIVersion: DWord; cdecl;
+begin
+  Result := CActionPlugin_APIVersion;
+end;
+
+
+procedure GetListOfProperties(APluginReference: Pointer;                 //UIClicker passes the plugin reference to the plugin, then the plugin calls some callbacks with that reference
+                              AListOfProperties: Pointer;
+                              AListOfPropertiesLen: PDWord;
+                              AOnActionPlugin_UpdatePropertyIcons: TOnActionPlugin_UpdatePropertyIcons); cdecl;
+var
+  Properties: string;
+  i: Integer;
+  TempMemStream: TMemoryStream;
+  Bmp: TBitmap;
+begin
+  Properties := FillInPropertyDetails;
+  AListOfPropertiesLen^ := SetPointedContentFromString(Properties, AListOfProperties);
+
+  dmProperties := TdmProperties.Create(nil);
+  try
+    for i := 0 to CPropertiesCount - 1 do
+    begin
+      TempMemStream := TMemoryStream.Create;
+      Bmp := TBitmap.Create;
+      try
+        Bmp.PixelFormat := pf24bit;
+        Bmp.Width := dmProperties.imglstProperties.Width;
+        Bmp.Height := dmProperties.imglstProperties.Height;
+        Bmp.Canvas.Pen.Color := clWhite;
+        Bmp.Canvas.Brush.Color := clWhite;
+        Bmp.Canvas.Rectangle(0, 0, Bmp.Width, Bmp.Height);
+
+        dmProperties.imglstProperties.Draw(Bmp.Canvas, 0, 0, i, dsNormal, itImage);
+        Bmp.SaveToStream(TempMemStream);
+
+        AOnActionPlugin_UpdatePropertyIcons(APluginReference, TempMemStream.Memory, TempMemStream.Size);
+      finally
+        TempMemStream.Free;
+        Bmp.Free;
+      end;
+    end;
+  finally
+    dmProperties.Free;
+  end;
+end;
+
+
+procedure GetPluginSettingsFromProperties(AProperties: TStringList; AListOfVars: string);
+begin
+  WhatToBecomeVarNamePropertyValue := AProperties.Values[CWhatToBecomeVarNamePropertyName];
+  CurrentTextVarNamePropertyValue := AProperties.Values[CCurrentTextVarNamePropertyName];
+  TextToBeTypedVarNamePropertyValue := AProperties.Values[CTextToBeTypedVarNamePropertyName];
+  CurrentTextVarUpdaterActionPropertyValue := AProperties.Values[CCurrentTextVarUpdaterActionPropertyName];
+  LowLevelTypewriterActionPropertyValue := AProperties.Values[CLowLevelTypewriterActionPropertyName];
+end;
+
+
+function ExecutePlugin(APluginReference: Pointer;
+                       AListOfPluginSettings: Pointer;
+                       AListOfPluginSettingsLen: PDWord;
+
+                       AOnActionPlugin_GetActionCount: TOnActionPlugin_GetActionCount;
+                       AOnActionPlugin_GetActionInfoByIndex: TOnActionPlugin_GetActionInfoByIndex;
+                       AOnActionPlugin_GetActionContentByIndex: TOnActionPlugin_GetActionContentByIndex;
+                       AOnActionPlugin_ExecuteAction: TOnActionPlugin_ExecuteAction;
+                       AOnActionPlugin_GetAllTemplateVars: TOnActionPlugin_GetAllTemplateVars;
+                       AOnActionPlugin_SetTemplateVar: TOnActionPlugin_SetTemplateVar;
+                       AOnActionPlugin_DebugPoint: TOnActionPlugin_DebugPoint;
+                       AOnActionPlugin_AddToLog: TOnActionPlugin_AddToLog;
+                       AOnActionPlugin_SetResultImg: TOnActionPlugin_SetResultImg;
+                       AOnActionPlugin_LoadBitmap: TOnActionPlugin_LoadBitmap;
+                       AOnActionPlugin_GetAllowedFilesInfo: TOnActionPlugin_GetAllowedFilesInfo;
+                       AOnActionPlugin_SetBitmap: TOnActionPlugin_SetBitmap;
+                       AOnActionPlugin_Screenshot: TOnActionPlugin_Screenshot
+                       ): Boolean; cdecl;
+var
+  ActionCount, IndexOfCurrentTextVarUpdaterActionProperty, IndexOfLowLevelTypewriterActionProperty: Integer;
+  PluginSettingsStr, AllVarsStr: string;
+  ListOfAllVars: TStringList;
+  s: string;
+  ActionTypeDWord: DWord;
+  ActionType: TClkAction;
+  PluginSettings: TStringList;
+
+  TempDiffLoader: TDiffLoader;
+
+  procedure SetTemplateVar(AVarName, AVarValue: string);
+  begin
+    AOnActionPlugin_SetTemplateVar(APluginReference, @AVarName[1], @AVarValue[1]);
+  end;
+
+  procedure GetActionInfoByIndex(AIndex: Integer; out AActionName: string; var AActionType: DWord);
+  var
+    Buffer: string;
+    ActionNamePtr: Pointer;
+    NameLengthDWord: DWord;
+  begin
+    SetLength(Buffer, CMaxSharedStringLength + 1);
+    ActionNamePtr := @Buffer[1];
+    NameLengthDWord := 0;
+
+    AActionName := '';
+    AOnActionPlugin_GetActionInfoByIndex(APluginReference, AIndex, ActionNamePtr, @NameLengthDWord, @AActionType);
+    SetPointedContentToString(ActionNamePtr, AActionName);
+    SetLength(AActionName, NameLengthDWord);
+  end;
+
+  procedure GetAllTemplateVars(out AAllTemplateVars: string);  //AAllTemplateVars are encoded as CRLF separated key=value strings, ready to be used on a TStringlist
+  var
+    Buffer: string;
+    AllTemplateVarsPtr: Pointer;
+    NameLengthDWord: DWord;
+  begin
+    SetLength(Buffer, CMaxSharedStringLength + 1);
+    AllTemplateVarsPtr := @Buffer[1];
+    NameLengthDWord := 0;
+    AAllTemplateVars := '';
+
+    AOnActionPlugin_GetAllTemplateVars(APluginReference, AllTemplateVarsPtr, @NameLengthDWord);  //decode action execution results
+
+    SetPointedContentToString(AllTemplateVarsPtr, AAllTemplateVars);
+    SetLength(AAllTemplateVars, NameLengthDWord);
+  end;
+
+  function GetPluginSettings: string;
+  begin
+    SetLength(Result, CMaxSharedStringLength);
+    SetPointedContentToString(AListOfPluginSettings, Result);
+    SetLength(Result, AListOfPluginSettingsLen^);
+  end;
+
+var
+  i, DiffCount, idx1, idx2: Integer;
+  s1, s2, Instr: string;
+begin
+  Result := True;
+  try
+    DefaultOnActionPlugin_DebugPoint := AOnActionPlugin_DebugPoint;
+    DefaultPluginReference := APluginReference;
+    AddToLogCallback := AOnActionPlugin_AddToLog;
+
+    ListOfAllVars := TStringList.Create;
+    try
+      PluginSettings := TStringList.Create;
+      try
+        if not DbgPoint('Entering ExecutePlugin', '') then     //see ClkDbgSym.ppr for expected statement formats
+          Exit;
+
+        ActionCount := AOnActionPlugin_GetActionCount(APluginReference);
+        if ActionCount = 0 then
+        begin
+          SetTemplateVar(CActionPlugin_ExecutionResultErrorVar, 'This plugin does not run on an empty template.');
+          Exit;
+        end;
+
+        PluginSettingsStr := GetPluginSettings;
+        PluginSettings.Text := PluginSettingsStr;
+
+        if PluginSettings.Count <> CPropertiesCount then
+        begin
+          SetTemplateVar(CActionPlugin_ExecutionResultErrorVar, 'Cannot get the list of plugin properties.');
+          Exit;
+        end;
+
+        GetAllTemplateVars(AllVarsStr);
+        GetPluginSettingsFromProperties(PluginSettings, AllVarsStr);
+        ListOfAllVars.Text := AllVarsStr;
+
+        s := 'unset action';
+        IndexOfCurrentTextVarUpdaterActionProperty := -1;
+        IndexOfLowLevelTypewriterActionProperty := -1;
+        for i := 0 to ActionCount - 1 do
+        begin
+          GetActionInfoByIndex(i, s, ActionTypeDWord);
+          AddToLog('Found action [' + IntToStr(i) + ']: ' + s);
+
+          if ActionTypeDWord <> $FFFFFFFF then
+          begin
+            ActionType := TClkAction(ActionTypeDWord);
+
+            if ActionType in [acFindControl, acCallTemplate, acSetVar, acPlugin] then
+              if s = PluginSettings.ValueFromIndex[CCurrentTextVarUpdaterActionPropertyIndex] then   //the current action name ([i]) matches FindSubControl property
+              begin
+                IndexOfCurrentTextVarUpdaterActionProperty := i;
+                //Break;
+              end;
+
+            if ActionType in [acCallTemplate, acSetControlText, acPlugin] then
+              if s = PluginSettings.ValueFromIndex[CLowLevelTypewriterActionPropertyIndex] then   //the current action name ([i]) matches FindSubControl property
+              begin
+                IndexOfLowLevelTypewriterActionProperty := i;
+                //Break;
+              end;
+          end;
+        end;
+
+        if IndexOfCurrentTextVarUpdaterActionProperty = -1 then
+        begin
+          SetTemplateVar(CActionPlugin_ExecutionResultErrorVar, 'CurrentTextVarUpdater action not configured.');
+          Exit;
+        end;
+
+        if IndexOfLowLevelTypewriterActionProperty = -1 then
+        begin
+          SetTemplateVar(CActionPlugin_ExecutionResultErrorVar, 'LowLevelTypewriter action not configured.');
+          Exit;
+        end;
+      finally
+        PluginSettings.Free;
+      end;
+
+      AddToLog('Calling var updater (' + CurrentTextVarUpdaterActionPropertyValue + ') action...');
+      if not AOnActionPlugin_ExecuteAction(APluginReference, @CurrentTextVarUpdaterActionPropertyValue[1]) then
+      begin
+        SetTemplateVar(CActionPlugin_ExecutionResultErrorVar, 'The required "' + CurrentTextVarUpdaterActionPropertyValue + '" action has failed on updating $Control_Left$ and $Control_Top$.');
+        Exit;
+      end;
+
+      GetAllTemplateVars(AllVarsStr);
+      ListOfAllVars.Text := AllVarsStr;
+
+      TempDiffLoader := TDiffLoader.Create;
+      try
+        s1 := EvaluateAllReplacements(ListOfAllVars, CurrentTextVarNamePropertyValue); //e.g. 'This is a text to be diff-ed from F1.';
+        s2 := EvaluateAllReplacements(ListOfAllVars, WhatToBecomeVarNamePropertyValue); //e.g. 'This was a long text to be diff-ed in F2.';
+        DiffCount := TempDiffLoader.LoadStrings(s1, s2);
+
+        AddToLog('CurrentText is "' + s1 + '".');
+        AddToLog('WhatToBecome is "' + s2 + '".');
+        AddToLog('');
+
+        s := '';
+        Instr := '$Home$';
+        for i := 0 to DiffCount - 1 do
+        begin
+          idx1 := TempDiffLoader.GetSourceIndexLeft(i);
+          idx2 := TempDiffLoader.GetSourceIndexRight(i);
+
+          case TChangeKind(TempDiffLoader.GetDiffAtIndex(i)) of
+            ckNone:
+            begin
+              s := s + s1[idx1 + 1];
+              Instr := Instr + '$Right$';
+            end;
+
+            ckAdd:           //The following instructions (to insert and to delete) should be applied to the first string (i.e. the current string), to obtain the second string.
+            begin
+              s := s + ''; //'+';  '' means to simply insert,  '+' means that the first string has to inset this content from the second. Show what to do, i.e. to insert.
+              Instr := Instr + s2[idx2 + 1];
+            end;
+
+            ckDelete:
+            begin
+              s := s + ''; //'-';  '' means to simply delete,  '-' means that the first string is missing something. Show what to do, i.e. to delete only.
+              Instr := Instr + '$Delete$';
+            end;
+
+            ckModify:
+            begin
+              s := s + ''; //'*';  '' means to delete+insert,  '*' means that the two strings are different. Show what to do, i.e. to delete, then insert.
+              Instr := Instr + '$Delete$' + s2[idx2 + 1];
+            end;
+          end;
+        end;
+        AddToLog('DiffText is "' + s + '".');
+        AddToLog('TextToBeTyped is "' + Instr + '".');
+
+      finally
+        TempDiffLoader.Free;
+      end;
+
+      SetTemplateVar(TextToBeTypedVarNamePropertyValue, Instr);   //e.g. SetTemplateVar('$TextToBeTyped$', Instr);
+
+      AddToLog('Calling Typewriter action (' + LowLevelTypewriterActionPropertyValue + ')...');
+      if not AOnActionPlugin_ExecuteAction(APluginReference, @LowLevelTypewriterActionPropertyValue[1]) then
+      begin
+        SetTemplateVar(CActionPlugin_ExecutionResultErrorVar, 'The required "' + LowLevelTypewriterActionPropertyValue + '" action has failed on updating $Control_Left$ and $Control_Top$.');
+        Exit;
+      end;
+    finally
+      ListOfAllVars.Free;
+    end;
+  except
+    on E: Exception do
+    begin
+      Result := False;
+      SetTemplateVar(CActionPlugin_ExecutionResultErrorVar, 'Plugin ex: ' + E.Message);
+    end;
+  end;
+end;
+
+
+exports
+  GetAPIVersion,
+  GetListOfProperties,
+  ExecutePlugin;
+
+begin
+end.
+
