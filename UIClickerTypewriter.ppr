@@ -125,7 +125,8 @@ function ExecutePlugin(APluginReference: Pointer;
                        AOnActionPlugin_LoadBitmap: TOnActionPlugin_LoadBitmap;
                        AOnActionPlugin_GetAllowedFilesInfo: TOnActionPlugin_GetAllowedFilesInfo;
                        AOnActionPlugin_SetBitmap: TOnActionPlugin_SetBitmap;
-                       AOnActionPlugin_Screenshot: TOnActionPlugin_Screenshot
+                       AOnActionPlugin_Screenshot: TOnActionPlugin_Screenshot;
+                       AOnActionPlugin_CheckStopAllActionsOnDemand: TOnActionPlugin_CheckStopAllActionsOnDemand
                        ): Boolean; cdecl;
 var
   ActionCount, IndexOfCurrentTextVarUpdaterActionProperty, IndexOfLowLevelTypewriterActionProperty: Integer;
