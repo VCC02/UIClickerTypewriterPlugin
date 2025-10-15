@@ -1,5 +1,5 @@
 {
-    Copyright (C) 2024 VCC
+    Copyright (C) 2025 VCC
     creation date: 05 Jul 2024
     initial release date: 07 Jul 2024
 
@@ -127,7 +127,8 @@ function ExecutePlugin(APluginReference: Pointer;
                        AOnActionPlugin_SetBitmap: TOnActionPlugin_SetBitmap;
                        AOnActionPlugin_Screenshot: TOnActionPlugin_Screenshot;
                        AOnActionPlugin_CheckStopAllActionsOnDemand: TOnActionPlugin_CheckStopAllActionsOnDemand;
-                       AOnActionPlugin_InMemFS: TOnActionPlugin_InMemFS
+                       AOnActionPlugin_InMemFS: TOnActionPlugin_InMemFS;
+                       AOnActionPlugin_AppProcMsg: TOnActionPlugin_AppProcMsg
                        ): Boolean; cdecl;
 var
   ActionCount, IndexOfCurrentTextVarUpdaterActionProperty, IndexOfLowLevelTypewriterActionProperty: Integer;
