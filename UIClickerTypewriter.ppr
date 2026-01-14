@@ -29,7 +29,7 @@ library UIClickerTypewriter;
 uses
   Interfaces, Classes, SysUtils, Graphics, TypewriterDM, ImgList,
   ClickerActionPlugins, ClickerUtils, DllUtils,
-  TypewriterPluginProperties,
+  TypewriterPluginProperties, ClickerActionPluginAccess,
   StringDiffLoader, HashUnit, Diff;
 
 
@@ -63,36 +63,13 @@ procedure GetListOfProperties(APluginReference: Pointer;                 //UICli
                               AOnActionPlugin_UpdatePropertyIcons: TOnActionPlugin_UpdatePropertyIcons); cdecl;
 var
   Properties: string;
-  i: Integer;
-  TempMemStream: TMemoryStream;
-  Bmp: TBitmap;
 begin
   Properties := FillInPropertyDetails;
   AListOfPropertiesLen^ := SetPointedContentFromString(Properties, AListOfProperties);
 
   dmProperties := TdmProperties.Create(nil);
   try
-    for i := 0 to CPropertiesCount - 1 do
-    begin
-      TempMemStream := TMemoryStream.Create;
-      Bmp := TBitmap.Create;
-      try
-        Bmp.PixelFormat := pf24bit;
-        Bmp.Width := dmProperties.imglstProperties.Width;
-        Bmp.Height := dmProperties.imglstProperties.Height;
-        Bmp.Canvas.Pen.Color := clWhite;
-        Bmp.Canvas.Brush.Color := clWhite;
-        Bmp.Canvas.Rectangle(0, 0, Bmp.Width, Bmp.Height);
-
-        dmProperties.imglstProperties.Draw(Bmp.Canvas, 0, 0, i, dsNormal, itImage);
-        Bmp.SaveToStream(TempMemStream);
-
-        AOnActionPlugin_UpdatePropertyIcons(APluginReference, TempMemStream.Memory, TempMemStream.Size);
-      finally
-        TempMemStream.Free;
-        Bmp.Free;
-      end;
-    end;
+    UpdatePropertyIcons(APluginReference, AOnActionPlugin_UpdatePropertyIcons, dmProperties.imglstProperties, CPropertiesCount);
   finally
     dmProperties.Free;
   end;
@@ -144,22 +121,6 @@ var
   procedure SetTemplateVar(AVarName, AVarValue: string);
   begin
     AOnActionPlugin_SetTemplateVar(APluginReference, @AVarName[1], @AVarValue[1]);
-  end;
-
-  procedure GetActionInfoByIndex(AIndex: Integer; out AActionName: string; var AActionType: DWord);
-  var
-    Buffer: string;
-    ActionNamePtr: Pointer;
-    NameLengthDWord: DWord;
-  begin
-    SetLength(Buffer, CMaxSharedStringLength + 1);
-    ActionNamePtr := @Buffer[1];
-    NameLengthDWord := 0;
-
-    AActionName := '';
-    AOnActionPlugin_GetActionInfoByIndex(APluginReference, AIndex, ActionNamePtr, @NameLengthDWord, @AActionType);
-    SetPointedContentToString(ActionNamePtr, AActionName);
-    SetLength(AActionName, NameLengthDWord);
   end;
 
   procedure GetAllTemplateVars(out AAllTemplateVars: string);  //AAllTemplateVars are encoded as CRLF separated key=value strings, ready to be used on a TStringlist
@@ -228,7 +189,7 @@ begin
         IndexOfLowLevelTypewriterActionProperty := -1;
         for i := 0 to ActionCount - 1 do
         begin
-          GetActionInfoByIndex(i, s, ActionTypeDWord);
+          GetActionInfoByIndex(APluginReference, AOnActionPlugin_GetActionInfoByIndex, i, s, ActionTypeDWord);
           AddToLog('Found action [' + IntToStr(i) + ']: ' + s);
 
           if ActionTypeDWord <> $FFFFFFFF then

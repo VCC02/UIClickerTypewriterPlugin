@@ -70,6 +70,10 @@
         <Filename Value="C:\codetyphon\CodeOcean\pl_ExSystem\samples\Diff2\HashUnit.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
+      <Unit>
+        <Filename Value="..\UIClicker\ClickerUtils\ClickerActionPluginAccess.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
